@@ -23,12 +23,6 @@ The project investigates associations between baseline plasma nuclear magnetic r
 │   ├── 2.Trajectories+clusters.R
 │   └── 3.PRS
 │   └── 4.SEM.R
-├── data/
-│   ├── analysis_dataset.rds              # not provided
-│   ├── mydata_base.csv                   # not provided
-│   └── metabolite_name_map.csv           # not provided
-├── results/
-└── figures/
 ```
 
 ---

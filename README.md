@@ -1,6 +1,6 @@
 # Plasma Metabolomic Signatures of Migraine
 
-<img width="7300" height="7049" alt="Fig1" src="https://github.com/user-attachments/assets/8d3f0194-46bb-406a-ae68-b8ba40cba8ae" />
+<img width="6625" height="5852" alt="Fig1" src="https://github.com/user-attachments/assets/88834f66-8275-436b-90f7-3c935c6d4113" />
 
 This repository contains analysis code for the project:
 

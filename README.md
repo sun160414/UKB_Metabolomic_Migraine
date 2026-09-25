@@ -229,7 +229,7 @@ source("scripts/03_sem_latent_factor_github.R")
 
 If you use this code, please cite the associated manuscript:
 
-> Hong Y, Chen F, Wang Y, Huang X-F. *Plasma metabolomic signatures of migraine in 479,760 adults*.
+> Hong Y, Chen F, Wang Y, and Huang X. F. (2026). Plasma metabolomic signatures of migraine in 479,760 adults. *iScience*, 29(8), 117031. https://doi.org/10.1016/j.isci.2026.117031
 
 ---
 

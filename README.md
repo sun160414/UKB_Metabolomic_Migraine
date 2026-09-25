@@ -2,45 +2,105 @@
 
 <img width="6625" height="5852" alt="Fig1" src="https://github.com/user-attachments/assets/88834f66-8275-436b-90f7-3c935c6d4113" />
 
-This repository contains analysis code for the project:
+This repository contains analysis code for:
 
 **Plasma metabolomic signatures of migraine in 479,760 adults**
 
 The project investigates associations between baseline plasma nuclear magnetic resonance (NMR) metabolomic measures and hospital-diagnosed migraine in UK Biobank, with downstream analyses integrating matched time-to-diagnosis gradients, feature prioritization, brain MRI phenotypes, polygenic risk scores, sleep/affective traits, and exploratory structural equation modeling.
 
-> **Data note**
-> UK Biobank individual-level data are not included in this repository. Users must obtain access to UK Biobank data through the official application process and prepare the required input files locally.
+The repository also includes a separate synthetic-data companion for **Protocol for matched time-to-diagnosis gradient analysis of baseline plasma metabolomics in prospective cohorts**.
 
----
+> **Choose the appropriate entry point.** To try the protocol without UK Biobank data, start with the [synthetic demonstration](protocol_demo/README.md). The study-specific scripts in the repository root require locally prepared, authorized research data and are not the synthetic-demo entry point.
+
+> **Data note.** No individual-level UK Biobank data are distributed here. The demonstration generates artificial records locally and does not use real participants, fitted UKB parameters, or the original study's results tables. Reanalysis of the original study requires authorized data access and local input preparation.
+
+## Quick start: STAR Protocols synthetic demonstration
+
+### 1. Install the demonstration dependencies
+
+Use R 4.1 or later and ggplot2 3.4.0 or later. In R, install:
+
+```r
+install.packages(c("MatchIt", "survival", "ggplot2", "mclust", "cluster"))
+```
+
+These are the dependencies of the **synthetic demonstration**. The original study scripts have additional dependencies listed below.
+
+### 2. Run from the repository root
+
+After downloading or cloning the repository, run in a terminal:
+
+```bash
+Rscript --vanilla protocol_demo/run_synthetic_example.R
+```
+
+The runner locates its companion generator in the same directory. The default output folder is `protocol_demo/synthetic_demo_output/`; it must be new or empty.
+
+Alternatively, from R or RStudio with the repository root as the working directory:
+
+```r
+source("protocol_demo/run_synthetic_example.R")
+result <- run_synthetic_example(out_dir = "demo_run_01")
+result$summary
+result$checks
+```
+
+Sourcing the runner only defines functions; the explicit `run_synthetic_example()` call starts the analysis. Use a new output directory for each run.
+
+### 3. What the demonstration is designed to produce
+
+The default configuration generates **5,000 artificial participants and 20 generic metabolite measurements**, using seed `20260801`. The script connects data generation and preprocessing to cohort construction, Cox association testing, matching, balance assessment, residualization, matched-set Z-scores, LOESS, descriptive clustering, sensitivity analyses, figures, and output tables.
+
+It calculates Cox results from the generated cohort and does not require `NMR.csv`, `Map.txt`, `Data_Met_ascii.xlsx`, a preloaded `dat` object, or any of the original study scripts.
+
+After a successful run, inspect:
+
+```text
+protocol_demo/synthetic_demo_output/
+├── SYNTHETIC_ONLY.txt
+├── input/                       # Synthetic data, dictionary, preprocessing checks
+└── analysis/
+    ├── analysis_configuration.R
+    ├── sessionInfo.txt
+    ├── warnings.log
+    ├── execution_status.txt
+    ├── data_processed/          # RDS checkpoints
+    ├── tables/                  # CSV results and figure-source tables
+    └── figures/                 # Labeled synthetic demonstration PNGs
+```
+
+**Execution status:** the supplied scripts have received static inspection, but no completed R execution is documented in this update. Static inspection is not an R parser check or an end-to-end test. Run the example in a clean R session, inspect warnings and outputs, and retain the session information before reporting successful execution. A completed software run does not establish biological validity or eliminate confounding or selection bias.
+
+See [the demonstration README](protocol_demo/README.md) for parameter settings, output details, input-field mapping, scientific limitations, and verification steps.
 
 ## Repository structure
 
 ```text
 .
 ├── README.md
-├── scripts/
-│   ├── 1.Cox+linear.R
-│   ├── 2.Trajectories+clusters.R
-│   └── 3.PRS
-│   └── 4.SEM.R
+├── 1.Cox+linear.R
+├── 2.Trajectories+clusters.R
+├── 3.PRS
+├── 4.SEM.R
+└── protocol_demo/
+    ├── generate_synthetic_data.R
+    ├── run_synthetic_example.R
+    └── README.md
 ```
 
----
+The original study files remain in the **repository root**, not in a `scripts/` subfolder. The synthetic demonstration is separate and does not modify or source those files.
 
-## Analysis overview
+## Original study: analysis overview
 
 ### 1. Metabolite association analyses
 
-`scripts/01_cox_linear_github.R` performs:
+`1.Cox+linear.R` contains the study's association-analysis workflow:
 
-* Cox proportional hazards regression for incident hospital-diagnosed migraine.
-* Age-stratified Cox analyses: `<55 years` and `≥55 years`.
-* Sex-stratified Cox analyses: male and female participants.
-* Cross-sectional linear regression for prevalent migraine.
-* Multiple testing correction using Bonferroni and Benjamini-Hochberg FDR.
-* Volcano plots for the main and stratified analyses.
+- Cox regression for incident hospital-diagnosed migraine, including age- and sex-stratified analyses.
+- Cross-sectional linear regression for prevalent migraine.
+- Bonferroni and Benjamini–Hochberg multiple-testing correction and volcano plots.
 
-Main outputs:
+The original workflow documentation identifies the following main outputs:
 
 ```text
 results/cox_overall.csv
@@ -57,13 +117,15 @@ figures/Fig1E_cox_female_volcano.pdf
 figures/Fig1F_linear_prevalent_volcano.pdf
 ```
 
+These are study-specific outputs, not files distributed as results of the synthetic demonstration.
+
 ### 2. Matched time-to-diagnosis gradient analysis
 
-`scripts/02_trajectories_clusters_github.R` performs a matched case-control time-to-diagnosis gradient analysis. Incident migraine cases are matched to controls using nearest-neighbor Mahalanobis matching with exact matching on sex. Metabolite values are residualized for covariates, and case-control differences are expressed as standardized Z-scores within each matched subclass. LOESS smoothing and hierarchical clustering are then used to summarize descriptive baseline metabolite differences aligned to future diagnosis time.
+`2.Trajectories+clusters.R` contains the matched case-control gradient workflow. Incident cases are matched to controls using nearest-neighbor Mahalanobis matching with exact matching on sex. Metabolite values are residualized for covariates, and case-control differences are expressed as matched-set standardized Z-scores. LOESS and hierarchical clustering summarize descriptive baseline differences aligned to future diagnosis time.
 
-This analysis should be interpreted as a **between-person descriptive gradient analysis**, not as a within-person longitudinal trajectory analysis, because metabolites were measured once at baseline.
+The curves describe **between-person baseline gradients**, not within-person longitudinal trajectories.
 
-Main outputs:
+The original workflow documentation identifies the following main outputs:
 
 ```text
 results/match_incident_migraine_metabolome.csv
@@ -78,22 +140,15 @@ figures/Fig2A_heatmap_metabolome.pdf
 figures/Fig2B_trajectories_metabolome.pdf
 ```
 
-### 3. Exploratory SEM analysis
+### 3. PRS analysis
 
-`scripts/03_sem_latent_factor_github.R` fits exploratory structural equation models linking selected sleep/affective traits, a latent metabolite factor based on 12 LASSO-prioritized metabolites, and incident hospital-diagnosed migraine.
+`3.PRS` is the original study's PRS file. Review its input requirements and commands before running it. PRS analysis is outside the scope of the standalone matched-gradient demonstration.
 
-The default exposures are:
+### 4. Exploratory SEM
 
-```text
-Depression
-Anxiety
-Insomnia
-Sleep duration
-```
+`4.SEM.R` contains exploratory structural equation models relating sleep/affective traits, a latent factor based on 12 LASSO-prioritized metabolites, and incident hospital-diagnosed migraine. The documented exposure traits include depression, anxiety, insomnia, and sleep duration. These models describe statistical interrelationships and are not evidence of formal causal mediation.
 
-The SEM results are intended to summarize statistical interrelationships and should not be interpreted as formal causal mediation evidence.
-
-Main outputs:
+The original workflow documentation identifies:
 
 ```text
 results/sem_latent_metabolite_factor_loadings.csv
@@ -102,50 +157,40 @@ results/sem_fit_indices.csv
 results/sem_latent_factor_results.rds
 ```
 
----
+## Original study: expected inputs
 
-## Expected input data
+This section applies to the **study-specific root scripts**, not to the canonical field names used by `protocol_demo/`.
 
-### Main analysis dataset
+The participant-level study table has one row per participant and includes:
 
-The main analysis dataset should contain one row per participant and include at least the following variables:
+| Variable | Description |
+|---|---|
+| `eid` | Participant identifier |
+| `prevalent_migraine` | Diagnosis before or at baseline |
+| `incident_migraine` | Incident diagnosis after baseline |
+| `followup_years` | Time from baseline to event or censoring |
+| `migraine_years` | Diagnosis or censoring interval used by the study gradient script |
+| `age`, `sex`, `ethn` | Baseline demographic variables |
+| `Qualification` | Educational attainment |
+| `bmi`, `Socioeconomic` | BMI and deprivation indicator |
+| `Smoking_status`, `Alcohol_consumption` | Baseline smoking and alcohol categories |
+| `screen time (TV)`, `screen time (computer)` | Daily screen-time variables |
+| `sleep duration` | Average sleep duration |
+| `diabetes_status`, `CVD_status` | Baseline comorbidities |
+| `Meta_*` | Preprocessed metabolite variables, such as `Meta_1` |
 
-| Variable                 | Description                                                                                             |
-| ------------------------ | ------------------------------------------------------------------------------------------------------- |
-| `eid`                    | Participant identifier                                                                                  |
-| `prevalent_migraine`     | Migraine diagnosis before or at baseline                                                                |
-| `incident_migraine`      | Incident migraine diagnosis after baseline                                                              |
-| `followup_years`         | Follow-up time from baseline to event or censoring                                                      |
-| `migraine_years`         | Time from baseline to incident migraine diagnosis or censoring; required by the matched gradient script |
-| `age`                    | Age at baseline                                                                                         |
-| `sex`                    | Sex                                                                                                     |
-| `ethn`                   | Ethnicity category                                                                                      |
-| `Qualification`          | Educational attainment variable                                                                         |
-| `bmi`                    | Body mass index                                                                                         |
-| `Socioeconomic`          | Townsend deprivation index or equivalent socioeconomic indicator                                        |
-| `Smoking_status`         | Smoking status                                                                                          |
-| `Alcohol_consumption`    | Alcohol consumption status                                                                              |
-| `screen time (TV)`       | Daily TV screen time                                                                                    |
-| `screen time (computer)` | Daily computer screen time                                                                              |
-| `sleep duration`         | Average sleep duration                                                                                  |
-| `diabetes_status`        | Baseline diabetes status                                                                                |
-| `CVD_status`             | Baseline cardiovascular disease status                                                                  |
-| `Meta_*`                 | Standardized metabolite variables, such as `Meta_1`, `Meta_2`, ...                                      |
+The metabolite map `data/metabolite_name_map.csv` contains:
 
-### Metabolite name map
+| Column | Description |
+|---|---|
+| `Meta` | Internal metabolite identifier, such as `Meta_1` |
+| `Original_Metabolite` | Human-readable metabolite name |
 
-`data/metabolite_name_map.csv` should include:
+Consult the configuration and formulas in each study script for its exact input requirements. Restricted source data and private intermediate objects must be prepared locally and must not be uploaded to this repository.
 
-| Column                | Description                                  |
-| --------------------- | -------------------------------------------- |
-| `Meta`                | Internal metabolite ID, for example `Meta_1` |
-| `Original_Metabolite` | Human-readable metabolite name               |
+## Original study: dependencies and paths
 
----
-
-## Installation
-
-The scripts were developed in R and require the following packages:
+The original README lists these R dependencies for the study scripts:
 
 ```r
 install.packages(c(
@@ -160,79 +205,40 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) {
 BiocManager::install("ComplexHeatmap")
 ```
 
----
-
-## Example workflow
-
-### Step 1: Prepare data
+After preparing authorized inputs and checking each script's paths, the root-relative R entry points are:
 
 ```r
-library(data.table)
-library(dplyr)
+# Study-specific commands: not a standalone synthetic example.
+# Prepare the required dat object and file inputs before sourcing these scripts.
+source("1.Cox+linear.R")
 
-# Individual-level UK Biobank data are not provided.
-```
+# Prepare data/mydata_base.csv, the dictionary, and other required inputs first.
+source("2.Trajectories+clusters.R")
 
-### Step 2: Run association analyses
-
-```r
-source("scripts/1.Cox+linear.R")
-```
-
-### Step 3: Prepare input for matched gradient analysis
-
-```r
-mydata_base <- dat %>%
-  filter(prevalent_migraine == 0) %>%
-  mutate(
-    migraine_status = as.integer(incident_migraine == 1),
-    migraine_years = as.numeric(followup_years)
-  )
-
-fwrite(mydata_base, "data/mydata_base.csv")
-```
-
-### Step 4: Run matched time-to-diagnosis gradient analysis
-
-```r
-source("scripts/2.Trajectories+clusters.R")
-```
-
-### Step 5: Run PRS
-
-```
-source("3.PRS")
-```
-
----
-
-### Step 6: Run exploratory SEM analysis
-
-```r
+# Prepare the required SEM inputs before this step.
 dat_base <- dat
-source("scripts/03_sem_latent_factor_github.R")
+source("4.SEM.R")
 ```
 
----
+Do not prefix these paths with `scripts/` unless the files are deliberately moved to that directory. For the fully synthetic example, use only the quick-start commands at the top of this README.
 
-## Important interpretation notes
+## Interpretation and scope
 
-1. Migraine was defined using linked hospital inpatient records and ICD-10 code `G43`; therefore, the outcome should be interpreted as **hospital-diagnosed migraine**, not all migraine cases in the community.
-2. Many NMR-derived lipoprotein metabolites are highly correlated. Results should be interpreted at the lipid/lipoprotein module level rather than as fully independent single-metabolite effects.
-3. The matched time-to-diagnosis analysis uses baseline metabolite measurements only. It describes between-person gradients aligned to future diagnosis time and does not estimate within-person longitudinal metabolic change.
-4. The LASSO-prioritized metabolites are internally selected features and should not be treated as an externally validated clinical prediction panel without independent validation.
-5. The SEM analysis is exploratory and should not be interpreted as formal causal mediation.
-
----
+- The original study concerns hospital-diagnosed migraine and should not be interpreted as representing all community-managed migraine.
+- Many NMR lipid and lipoprotein measures are correlated; individual signals and descriptive clusters are not independent biological discoveries.
+- The matched-gradient workflow uses one baseline measurement per participant and cannot estimate within-person change.
+- The demonstration retains observed-noncase controls rather than case-date-specific risk-set sampling, and same-cohort Cox selection rather than sample-split validation. These choices are explicit in its documentation.
+- The study's internally prioritized metabolites are not an externally validated prediction panel, and the SEM analyses do not establish causal mediation.
+- Synthetic execution is a software check only. It does not validate the original results or demonstrate generalizability across cohorts, omics platforms, or outcomes.
 
 ## Citation
 
-If you use this code, please cite the associated manuscript:
+For the associated study:
 
 > Hong Y, Chen F, Wang Y, and Huang X. F. (2026). Plasma metabolomic signatures of migraine in 479,760 adults. *iScience*, 29(8), 117031. https://doi.org/10.1016/j.isci.2026.117031
 
----
+The companion protocol is titled **Protocol for matched time-to-diagnosis gradient analysis of baseline plasma metabolomics in prospective cohorts**. Cite the final protocol publication when its bibliographic details are available; the synthetic example does not constitute a separate biological study.
 
 ## Contact
 
-For questions about the analysis code, please contact the corresponding author listed in the associated manuscript.
+For questions about the original study or protocol implementation, contact the corresponding author listed in the associated manuscript.

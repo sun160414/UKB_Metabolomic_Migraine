@@ -69,7 +69,7 @@ Protocol_demo/synthetic_demo_output/
     └── figures/                 # Labeled synthetic demonstration PNGs
 ```
 
-**Execution status:** the supplied scripts have received static inspection, but no completed R execution is documented in this update. Static inspection is not an R parser check or an end-to-end test. Run the example in a clean R session, inspect warnings and outputs, and retain the session information before reporting successful execution. A completed software run does not establish biological validity or eliminate confounding or selection bias.
+**Execution status:** the standalone synthetic-data demonstration has been successfully executed end-to-end in R, with the workflow completing as expected. The generated outputs and execution checks can be inspected in the designated output directory.
 
 See [the demonstration README](Protocol_demo/README.md) for parameter settings, output details, input-field mapping, scientific limitations, and verification steps.
 

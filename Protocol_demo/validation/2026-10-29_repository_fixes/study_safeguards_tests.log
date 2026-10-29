@@ -1,0 +1,27 @@
+PASS: Cox covariate preparation preserves numeric factor labels
+PASS: Gradient covariate preparation preserves age and interval factor labels
+PASS: Both covariate preparers preserve already-numeric precision exactly
+PASS: UKB sex codes remain correct with reversed factor levels
+PASS: Explicit text-label mapping is honored
+PASS: Unmapped sex labels are rejected
+PASS: A missing mapped sex group is rejected
+PASS: Ambiguous sex-code mappings are rejected
+PASS: Prevalent cases are excluded and binary factor labels are preserved
+PASS: The incident-only legacy flag follows the same prevalence exclusion
+PASS: The baseline prevalence field is required
+PASS: Invalid incident codes cannot silently become controls
+PASS: Invalid prevalent codes are rejected
+PASS: A case cannot be simultaneously prevalent and incident
+PASS: Two supplied incident flags must agree
+PASS: Missing outcome flags are explicitly reported and excluded
+PASS: The regression fixture reproduces unsupported outward-grid predictions
+PASS: The revised common grid stays within observed support
+PASS: All fully supported artificial curves remain finite
+PASS: Supported curves survive to the clustering step
+PASS: Nonfinite observations cannot extend the prediction grid
+PASS: An all-invalid LOESS input fails clearly
+PASS: A nonpositive grid step is rejected
+PASS: Insufficient support for the requested grid fails clearly
+PASS: A metabolite with shorter support is not extrapolated
+PASS: Nonfinite prediction vectors cannot enter clustering
+All 26 study-safeguard checks passed.

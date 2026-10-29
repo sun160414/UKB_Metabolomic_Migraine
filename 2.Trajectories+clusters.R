@@ -5,8 +5,10 @@
 ##
 ## Expected inputs:
 ##   1) data/mydata_base.csv
-##      Individual-level analysis data with eid, migraine_status or incident_migraine,
+##      Individual-level analysis data with eid, prevalent_migraine (0/1),
+##      incident_migraine or an incident-only migraine_status (0/1),
 ##      migraine_years, covariates, and Meta_* metabolite columns.
+##      Baseline prevalent cases are explicitly excluded before matching.
 ##   2) data/metabolite_name_map.csv
 ##      Columns: Meta, Original_Metabolite.
 ##   3) results/cox_overall.csv
@@ -80,6 +82,10 @@ quote_if_needed <- function(x) {
 }
 
 standardize_covariates <- function(df) {
+  numeric_value <- function(x) {
+    if (is.factor(x)) x <- as.character(x)
+    as.numeric(x)
+  }
   numeric_vars <- intersect(
     c("age", "bmi", "Socioeconomic", "Qualification",
       "screen time (TV)", "screen time (computer)", "sleep duration", "migraine_years"),
@@ -92,7 +98,7 @@ standardize_covariates <- function(df) {
   )
 
   df %>%
-    mutate(across(all_of(numeric_vars), as.numeric)) %>%
+    mutate(across(all_of(numeric_vars), numeric_value)) %>%
     mutate(across(all_of(factor_vars), as.factor))
 }
 
@@ -144,25 +150,63 @@ get_significant_metabolites <- function(cox_file, significance_column = "p_bonf"
   raw_ids[!is.na(cox_df[[significance_column]]) & cox_df[[significance_column]] < 0.05]
 }
 
+parse_binary_status <- function(x, field) {
+  # Preserve factor labels; unsupported codes must not become noncases.
+  values <- trimws(as.character(x))
+  values[!is.na(values) & !nzchar(values)] <- NA_character_
+  invalid <- unique(values[!is.na(values) & !values %in% c("0", "1")])
+  if (length(invalid)) {
+    stop(field, " must contain only 0, 1 or missing values; found: ",
+         paste(invalid, collapse = ", "), call. = FALSE)
+  }
+  as.integer(values)
+}
+
 prepare_matching_data <- function(df, covars) {
   df <- standardize_covariates(df)
 
-  if ("incident_migraine" %in% names(df)) {
-    df$migraine_status <- as.integer(df$incident_migraine == 1)
-  } else if ("migraine_status" %in% names(df)) {
-    df$migraine_status <- as.integer(df$migraine_status == 1)
-  } else {
-    stop("Input data must contain either incident_migraine or migraine_status.")
+  if (!"prevalent_migraine" %in% names(df)) {
+    stop("Input data must contain prevalent_migraine (0/1) so baseline cases can be excluded.",
+         call. = FALSE)
   }
+  prevalent <- parse_binary_status(df$prevalent_migraine, "prevalent_migraine")
+  legacy_status <- if ("migraine_status" %in% names(df)) {
+    parse_binary_status(df$migraine_status, "migraine_status")
+  } else NULL
+  if ("incident_migraine" %in% names(df)) {
+    incident <- parse_binary_status(df$incident_migraine, "incident_migraine")
+    if (!is.null(legacy_status) &&
+        any(!is.na(incident) & !is.na(legacy_status) & incident != legacy_status)) {
+      stop("incident_migraine and migraine_status disagree. Resolve the incident outcome definition before matching.",
+           call. = FALSE)
+    }
+  } else if (!is.null(legacy_status)) {
+    incident <- legacy_status
+  } else {
+    stop("Input data must contain incident_migraine or an incident-only migraine_status (0/1).",
+         call. = FALSE)
+  }
+  if (any(prevalent == 1L & incident == 1L, na.rm = TRUE)) {
+    stop("A participant is flagged as both prevalent and incident migraine. Resolve contradictory outcome flags before matching.",
+         call. = FALSE)
+  }
+  df$prevalent_migraine <- prevalent
+  df$migraine_status <- incident
 
-  required_vars <- unique(c("eid", "migraine_status", "migraine_years", covars))
+  required_vars <- unique(c("eid", "prevalent_migraine", "migraine_status", "migraine_years", covars))
   missing_vars <- setdiff(required_vars, names(df))
   if (length(missing_vars) > 0) {
     stop("Missing variables in mydata_base: ", paste(missing_vars, collapse = ", "))
   }
 
+  missing_status <- is.na(prevalent) | is.na(incident)
+  if (any(missing_status)) {
+    warning("Excluded ", sum(missing_status),
+            " participants with missing prevalent or incident status before matching.", call. = FALSE)
+  }
   df %>%
-    filter(!is.na(migraine_status), !is.na(migraine_years), migraine_years > 0)
+    filter(!is.na(prevalent_migraine), prevalent_migraine == 0L,
+           !is.na(migraine_status), is.finite(migraine_years), migraine_years > 0)
 }
 
 run_matching <- function(df, covars, ratio = 10) {
@@ -261,19 +305,35 @@ compute_case_control_z <- function(resid_df) {
 }
 
 fit_loess_grid <- function(z_df, meta_cols, span = 0.75, step = 0.2, min_n = 10) {
+  if (length(step) != 1L || !is.numeric(step) || !is.finite(step) || step <= 0) {
+    stop("LOESS grid step must be one finite positive number.", call. = FALSE)
+  }
   long_df <- z_df %>%
     pivot_longer(
       cols = all_of(meta_cols),
       names_to = "Metabolite_raw",
       values_to = "Estimate"
     ) %>%
-    filter(!is.na(Year), !is.na(Estimate))
+    filter(is.finite(Year), is.finite(Estimate))
 
-  year_grid <- seq(
-    from = floor(min(long_df$Year, na.rm = TRUE)),
-    to = ceiling(max(long_df$Year, na.rm = TRUE)),
-    by = step
-  )
+  if (nrow(long_df) == 0L) {
+    stop("No finite matched-set Z-scores with finite diagnosis times are available for LOESS.",
+         call. = FALSE)
+  }
+  observed_range <- range(long_df$Year)
+  # Round inward: default interpolated LOESS cannot predict outside its support.
+  lower <- ceiling(observed_range[1] / step) * step
+  upper <- floor(observed_range[2] / step) * step
+  if (!all(is.finite(c(lower, upper))) || lower >= upper) {
+    stop("Insufficient observed time range for at least two inward-rounded LOESS grid points; check the grid step and diagnosis times.",
+         call. = FALSE)
+  }
+  year_grid <- seq(from = lower, to = upper, by = step)
+  year_grid <- year_grid[year_grid >= observed_range[1] & year_grid <= observed_range[2]]
+  if (length(year_grid) < 2L) {
+    stop("Fewer than two supported LOESS grid points remain; check the grid step and diagnosis times.",
+         call. = FALSE)
+  }
 
   purrr::map_dfr(meta_cols, function(m) {
     df_m <- long_df %>% filter(Metabolite_raw == m)
@@ -281,13 +341,16 @@ fit_loess_grid <- function(z_df, meta_cols, span = 0.75, step = 0.2, min_n = 10)
     if (nrow(df_m) < min_n || length(unique(df_m$Year)) < 5) return(NULL)
 
     fit <- tryCatch(
-      loess(Estimate ~ Year, data = df_m, span = span),
+      loess(Estimate ~ Year, data = df_m, span = span,
+            control = loess.control(surface = "interpolate")),
       error = function(e) NULL
     )
     if (is.null(fit)) return(NULL)
 
     pred_df <- data.frame(Year = year_grid)
     pred <- tryCatch(predict(fit, newdata = pred_df), error = function(e) rep(NA_real_, length(year_grid)))
+    # An individual metabolite may have narrower support than the common grid.
+    pred[year_grid < min(df_m$Year) | year_grid > max(df_m$Year)] <- NA_real_
 
     tibble(
       Year = year_grid,
@@ -307,7 +370,7 @@ cluster_loess_matrix <- function(loess_df, k = 3, method = "ward.D") {
     column_to_rownames("Metabolite_raw") %>%
     as.matrix()
 
-  mat <- mat[complete.cases(mat), , drop = FALSE]
+  mat <- mat[apply(mat, 1L, function(x) all(is.finite(x))), , drop = FALSE]
   if (nrow(mat) < k) stop("Too few complete metabolite trajectories for clustering.")
 
   hc <- hclust(dist(mat, method = "euclidean"), method = method)

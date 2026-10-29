@@ -490,8 +490,16 @@ cluster_predictions <- function(pred, k = 3L, method = "ward.D") {
 # Plot styles are illustrative; figure-source values remain untrimmed.
 save_plot <- function(plot, name, dirs, cfg, width = 8, height = 5) {
   if (!cfg$make_plots) return(invisible(NULL))
-  ggplot2::ggsave(file.path(dirs$figures, paste0(name, ".png")), plot = plot,
+  output_file <- file.path(dirs$figures, paste0(name, ".png"))
+  ggplot2::ggsave(output_file, plot = plot,
                  width = width, height = height, units = "in", dpi = cfg$plot_dpi)
+  # A graphics device can leave an empty file without raising an R error.
+  # Do not report the pipeline as completed when a figure export is missing.
+  png_signature <- as.raw(c(137, 80, 78, 71, 13, 10, 26, 10))
+  if (!file.exists(output_file) || file.info(output_file)$size <= 8L ||
+      !identical(readBin(output_file, what = "raw", n = 8L), png_signature)) {
+    stop("PNG export is missing, empty or invalid: ", output_file)
+  }
   invisible(plot)
 }
 
@@ -509,6 +517,31 @@ plot_covariate_balance <- function(balance_plot, cfg) {
       caption = "Dashed line: diagnostic reference. Undefined SMDs are not set to zero.",
       x = "Absolute post-match SMD", y = NULL) +
     ggplot2::theme_bw()
+}
+
+summarize_z_completeness <- function(completeness) {
+  required <- c("Metabolite_raw", "valid_fraction")
+  if (!is.data.frame(completeness) || !all(required %in% names(completeness)))
+    stop("Completeness requires Metabolite_raw and valid_fraction columns")
+  if (!nrow(completeness)) stop("No metabolites available for the completeness summary")
+  ids <- as.character(completeness$Metabolite_raw)
+  if (anyNA(ids) || any(!nzchar(ids)) || anyDuplicated(ids))
+    stop("Completeness requires unique, nonmissing metabolite identifiers")
+  fraction <- completeness$valid_fraction
+  if (!is.numeric(fraction)) stop("valid_fraction must be numeric")
+  evaluable <- is.finite(fraction)
+  if (any(evaluable & (fraction < 0 | fraction > 1)))
+    stop("Finite valid_fraction values must be between 0 and 1")
+  # Figure 1D counts metabolites complete in EVERY matched set. It is not
+  # the average valid fraction across metabolites. Unknown fractions must not
+  # be dropped from the denominator and thereby produce an artificial 100%.
+  data.frame(
+    n_metabolites = nrow(completeness),
+    n_complete_metabolites = sum(evaluable & fraction == 1),
+    n_unevaluable_metabolites = sum(!evaluable),
+    percent_complete = if (all(evaluable)) 100 * mean(fraction == 1) else NA_real_,
+    diagnostic_status = if (all(evaluable)) "computed" else "unevaluable_completeness"
+  )
 }
 
 plot_quality <- function(matched, balance_plot, z, completeness, dirs, cfg) {
@@ -530,11 +563,32 @@ plot_quality <- function(matched, balance_plot, z, completeness, dirs, cfg) {
     ggplot2::labs(title = paste(cfg$plot_title_prefix, "matched-set Z-scores"), x = "Matched-set Z", y = "Observations") +
     ggplot2::theme_bw()
   save_plot(p, "figure1C_z_distribution", dirs, cfg)
+  overall <- summarize_z_completeness(completeness)
+  write_table(overall, "figure1D_z_completeness_source", dirs)
+  summary_label <- if (is.finite(overall$percent_complete)) {
+    sprintf("Complete in every matched set: %d/%d metabolites (%.1f%%)",
+      overall$n_complete_metabolites, overall$n_metabolites, overall$percent_complete)
+  } else {
+    sprintf("Known complete: %d/%d metabolites; %d not evaluable",
+      overall$n_complete_metabolites, overall$n_metabolites, overall$n_unevaluable_metabolites)
+  }
+  p <- ggplot2::ggplot(overall, ggplot2::aes(x = "All metabolites", y = percent_complete)) +
+    ggplot2::geom_col(na.rm = TRUE) + ggplot2::coord_flip() +
+    ggplot2::scale_y_continuous(limits = c(0, 100)) +
+    ggplot2::labs(title = paste(cfg$plot_title_prefix, "Z-score completeness"),
+      subtitle = summary_label, x = NULL,
+      y = "Metabolites complete in every matched set (%)") +
+    ggplot2::theme_bw()
+  if (!is.finite(overall$percent_complete)) p <- p +
+    ggplot2::annotate("text", x = 1, y = 0, label = "Not evaluable", hjust = 0)
+  save_plot(p, "figure1D_z_completeness", dirs, cfg)
+  # Retain the finer per-metabolite view as a separate diagnostic.
   p <- ggplot2::ggplot(completeness, ggplot2::aes(x = Metabolite_raw, y = valid_fraction)) +
     ggplot2::geom_col() + ggplot2::coord_flip() +
-    ggplot2::labs(title = paste(cfg$plot_title_prefix, "Z-score completeness"), x = NULL, y = "Fraction of matched sets with a valid Z") +
+    ggplot2::labs(title = paste(cfg$plot_title_prefix, "per-metabolite Z-score completeness"),
+      x = NULL, y = "Fraction of matched sets with a valid Z") +
     ggplot2::theme_bw()
-  save_plot(p, "figure1D_z_completeness", dirs, cfg, height = 6)
+  save_plot(p, "diagnostic_z_completeness", dirs, cfg, height = 6)
   p <- ggplot2::ggplot(z, ggplot2::aes(x = Metabolite_raw, y = control_sd)) +
     ggplot2::geom_boxplot(outlier.size = 0.5, na.rm = TRUE) + ggplot2::coord_flip() +
     ggplot2::labs(title = paste(cfg$plot_title_prefix, "denominator diagnostic"), x = NULL, y = "Within-set control residual SD") +

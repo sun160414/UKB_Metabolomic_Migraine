@@ -8,7 +8,9 @@ A standalone companion for **Protocol for matched time-to-diagnosis gradient ana
 
 ## Execution status
 
-The revised default example completed twice in R 4.3.3 on Linux. See the [current versioned validation records](validation/2026-10-29_repository_fixes/) for the tested source fingerprints, configuration, execution checks, warnings and baseline/repeat comparison results. All 268 comparison and PNG-export checks passed; the original numerical analysis outputs were unchanged. The [earlier balance-synchronization records](validation/2026-10-29_balance_sync/) remain available for their recorded revision. A successful run applies to the recorded source contents and configuration, not automatically to later code changes. Successful execution confirms computational functionality but does not constitute independent biological validation.
+The default example in verified revision [`19c479a`](https://github.com/sun160414/UKB_Metabolomic_Migraine/tree/19c479abeeed911e8c70abe7661065f18d26c420) completed twice in R 4.3.3 on Linux. See the [archived verification records](https://github.com/sun160414/UKB_Metabolomic_Migraine/tree/19c479abeeed911e8c70abe7661065f18d26c420/Protocol_demo/validation/2026-10-29_repository_fixes/) for the tested source fingerprints, configuration, execution checks, warnings and baseline/repeat comparison results. All 268 comparison and PNG-export checks passed; the original numerical analysis outputs were unchanged. The [earlier balance-synchronization records](https://github.com/sun160414/UKB_Metabolomic_Migraine/tree/19c479abeeed911e8c70abe7661065f18d26c420/Protocol_demo/validation/2026-10-29_balance_sync/) remain available for their recorded revision. A successful run applies to the recorded source contents and configuration, not automatically to later code changes. Successful execution confirms computational functionality but does not constitute independent biological validation.
+
+Regression tests and saved verification records are retained in that historical revision. They are not required to run the example and are omitted from the current directory layout.
 
 This companion is independent of the original study scripts in the repository root. It generates its own inputs and recomputes Cox results locally; it does not modify or source the study-specific analysis files.
 
@@ -20,21 +22,12 @@ Keep the two R scripts together in the repository's **`Protocol_demo/`** folder.
 Protocol_demo/
 ├── generate_synthetic_data.R
 ├── run_synthetic_example.R
-├── README.md
-├── tests/
-│   ├── test_balance.R
-│   └── test_completeness.R
-└── validation/
-    ├── 2026-10-29_balance_sync/
-    └── 2026-10-29_repository_fixes/
+└── README.md
 ```
 
 - `generate_synthetic_data.R`: generates a participant-level cohort, a raw metabolite matrix, a preprocessed matrix, a metabolite dictionary, and preprocessing audit files. It requires base R only. It does **not** fit Cox models or produce final analysis figures.
 - `run_synthetic_example.R`: calls the generator, fits Cox models from the newly generated data, performs matching and the downstream protocol, and writes analysis tables, RDS checkpoints, PNG figures, configuration, warnings and execution checks. It can also be sourced to expose functions without executing the default example.
 - `README.md`: installation, run instructions, inputs, outputs, parameter changes and limitations.
-- `tests/test_balance.R`: focused regression checks for SMD calculation, categorical aggregation and unevaluable diagnostics.
-- `tests/test_completeness.R`: checks that Figure 1D counts metabolites complete in every matched set, including explicit handling of unavailable completeness values.
-- `validation/`: compact, version-specific verification records; not participant-level study data.
 
 No other files from the study repository need to be sourced. In particular, this example does not depend on `NMR.csv`, `Map.txt`, `dat`, `Data_Met_ascii.xlsx`, or an existing R workspace.
 
@@ -46,7 +39,7 @@ Use R 4.1 or later. Install the required packages once in R:
 install.packages(c("MatchIt", "survival", "ggplot2", "mclust", "cluster"))
 ```
 
-The plotting code uses `linewidth`, so use **ggplot2 3.4.0 or later**. Matching uses the documented `matchit()` and `match.data()` APIs. The current verification environment is R 4.3.3 on Ubuntu 24.04.3 LTS with MatchIt 4.5.5, survival 3.5-8, ggplot2 3.4.4, mclust 6.0.1 and cluster 2.1.6. The earlier balance-synchronization revision was verified in R 4.4.2 with its separately recorded package versions. See each versioned record for its associated source contents and execution status. These versions describe tested environments, not an enforced lockfile or a guarantee for other versions. The script reports missing packages rather than installing software automatically.
+The plotting code uses `linewidth`, so use **ggplot2 3.4.0 or later**. Matching uses the documented `matchit()` and `match.data()` APIs. The archived verification used R 4.3.3 on Ubuntu 24.04.3 LTS with MatchIt 4.5.5, survival 3.5-8, ggplot2 3.4.4, mclust 6.0.1 and cluster 2.1.6. The earlier balance-synchronization revision was verified in R 4.4.2 with its separately recorded package versions. See each archived record for its associated source contents and execution status. These versions describe tested environments, not an enforced lockfile or a guarantee for other versions. The script reports missing packages rather than installing software automatically.
 
 The standalone demo uses `survival` to fit Cox models, `mclust` for adjusted Rand indices, and `cluster` for silhouette diagnostics. The manuscript code boxes also directly use `data.table` 1.17.0, `readxl` 1.4.5, `patchwork` 1.3.0 and `scales` 1.3.0, as recorded in the original analysis sessions. Those four are not additional direct dependencies of this demo: it uses base R for data handling and exports separate figure panels. Packages such as `scales` may still be loaded indirectly by ggplot2.
 
@@ -142,7 +135,7 @@ The synthetic generator deliberately creates `education` as the arbitrary catego
 
 ## 5. Expected output structure
 
-The following are **expected files on successful execution**. The compact versioned verification records are separate from these full, locally generated outputs:
+The following are **expected files on successful execution**. The archived verification records linked above are separate from these full, locally generated outputs:
 
 ```text
 synthetic_demo_output/
@@ -245,11 +238,9 @@ One baseline measurement per participant supports **between-person descriptive g
 
 Before uploading a tested release, locally:
 
-1. Run the regression checks, then the command-line example with `--vanilla` after installing dependencies:
+1. Run the command-line example with `--vanilla` after installing dependencies:
 
    ```bash
-   Rscript --vanilla Protocol_demo/tests/test_balance.R
-   Rscript --vanilla Protocol_demo/tests/test_completeness.R
    Rscript --vanilla Protocol_demo/run_synthetic_example.R demo_run_01 5000 20 20260801
    ```
 
@@ -269,3 +260,4 @@ The functions implement the supplied protocol's primary settings. The substantiv
 - R Cox model documentation: https://stat.ethz.ch/R-manual/R-devel/library/survival/html/coxph.html
 
 Installation and run commands assume the `Protocol_demo/` layout shown above. The original study scripts remain in the repository root; do not source them to run this demonstration.
+

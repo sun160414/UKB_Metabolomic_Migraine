@@ -1,9 +1,0 @@
-                             passed
-comparison                    TRUE
-  baseline_figure_export        10
-  baseline_vs_revised          116
-  repeated_figure_export        11
-  revised_figure_export         11
-  revised_independent_formula    1
-  revised_vs_repeated          119
-TOTAL: 268 PASS: 268 FAIL: 0 

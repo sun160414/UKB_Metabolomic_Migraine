@@ -71,29 +71,13 @@ Protocol_demo/synthetic_demo_output/
     └── figures/                 # Labeled synthetic demonstration PNGs
 ```
 
-**Execution status:** the revised synthetic demonstration completed twice with the default configuration in R 4.3.3 on Linux. All 88 focused regression checks, all eight execution checks in each run, and all 268 baseline/repeat comparison and PNG-export checks passed. The [current verification records](Protocol_demo/validation/2026-10-29_repository_fixes/) document the tested source contents, environment, warnings and comparisons. The [earlier balance-synchronization records](Protocol_demo/validation/2026-10-29_balance_sync/) remain available for their recorded revision. These checks use artificial data; the original UK Biobank analyses have not been rerun for this update.
+**Execution status:** at verified commit [`19c479a`](https://github.com/sun160414/UKB_Metabolomic_Migraine/tree/19c479abeeed911e8c70abe7661065f18d26c420), the synthetic demonstration completed twice with the default configuration in R 4.3.3 on Linux. All 88 focused regression checks, all eight execution checks in each run, and all 268 baseline/repeat comparison and PNG-export checks passed. These checks used artificial data; the original UK Biobank analyses have not been rerun for this update.
+
+The regression-test sources and validation snapshots are archived in that historical version and can be retrieved from it. The [repository-fix verification records](https://github.com/sun160414/UKB_Metabolomic_Migraine/tree/19c479abeeed911e8c70abe7661065f18d26c420/Protocol_demo/validation/2026-10-29_repository_fixes/) document the tested source contents, environment, warnings and comparisons. The [earlier balance-synchronization records](https://github.com/sun160414/UKB_Metabolomic_Migraine/tree/19c479abeeed911e8c70abe7661065f18d26c420/Protocol_demo/validation/2026-10-29_balance_sync/) retain the evidence for their recorded revision.
 
 Figure 1D summarizes the percentage of metabolites with valid Z-scores in **every** matched set: `100 * mean(valid_fraction == 1)`, where `valid_fraction` is calculated separately for each metabolite. It does not average the fractions themselves. An unknown/nonfinite fraction makes the overall percentage unevaluable. The summary is saved as `figure1D_z_completeness_source.csv`; `z_score_completeness.csv` and `diagnostic_z_completeness.png` retain the per-metabolite diagnostics.
 
 See [the demonstration README](Protocol_demo/README.md) for parameter settings, output details, input-field mapping, scientific limitations, and verification steps.
-
-### 4. Run focused regression checks
-
-From the repository root:
-
-```bash
-Rscript --vanilla tests/test_study_safeguards.R
-Rscript --vanilla Protocol_demo/tests/test_completeness.R
-Rscript --vanilla Protocol_demo/tests/test_balance.R
-```
-
-These suites contain 26 study-script safeguard checks, 9 completeness checks and 53 balance checks, respectively. They use artificial inputs and load function definitions without running the original study analyses. Their minimum additional packages are:
-
-```r
-install.packages(c("dplyr", "tidyr", "tibble", "purrr", "ggplot2"))
-```
-
-The completeness checks require base R only. The balance checks require ggplot2; the study-script checks require dplyr, tidyr, tibble and purrr. Running the full synthetic demonstration additionally requires the demonstration dependencies listed above.
 
 ## Repository structure
 
@@ -104,18 +88,10 @@ The completeness checks require base R only. The balance checks require ggplot2;
 ├── 2.Trajectories+clusters.R
 ├── 3.PRS
 ├── 4.SEM.R
-├── tests/
-│   └── test_study_safeguards.R
 └── Protocol_demo/
     ├── generate_synthetic_data.R
     ├── run_synthetic_example.R
-    ├── README.md
-    ├── tests/
-    │   ├── test_balance.R
-    │   └── test_completeness.R
-    └── validation/
-        ├── 2026-10-29_balance_sync/
-        └── 2026-10-29_repository_fixes/
+    └── README.md
 ```
 
 The original study files remain in the **repository root**, not in a `scripts/` subfolder. The synthetic demonstration is separate and does not modify or source those files.
@@ -280,3 +256,4 @@ The companion protocol is titled **Protocol for matched time-to-diagnosis gradie
 ## Contact
 
 For questions about the original study or protocol implementation, contact the corresponding author listed in the associated manuscript.
+

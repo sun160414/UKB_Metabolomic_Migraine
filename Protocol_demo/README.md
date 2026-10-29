@@ -4,6 +4,9 @@
 
 A standalone companion for **Protocol for matched time-to-diagnosis gradient analysis of baseline plasma metabolomics in prospective cohorts**.
 
+![Uploading Graphical abstract.jpeg…]()
+
+
 **All default inputs and outputs are fully synthetic. No UK Biobank participant records, fitted UKB parameters, private intermediate files, or original study result tables are used.** The example is a software demonstration, not a new biological analysis, independent validation, or a reproduction of the published migraine results.
 
 ## Execution status

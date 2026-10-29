@@ -1,4 +1,4 @@
-<img width="5869" height="5638" alt="Graphical abstract" src="https://github.com/user-attachments/assets/6b5ea72c-20d5-4ec5-a209-a7a1e12ed5e4" /># Standalone synthetic demonstration of matched time-to-diagnosis gradients
+# Standalone synthetic demonstration of matched time-to-diagnosis gradients
 
 [Back to repository overview](../README.md)
 

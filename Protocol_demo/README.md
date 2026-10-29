@@ -1,11 +1,10 @@
-# Standalone synthetic demonstration of matched time-to-diagnosis gradients
+<img width="5869" height="5638" alt="Graphical abstract" src="https://github.com/user-attachments/assets/6b5ea72c-20d5-4ec5-a209-a7a1e12ed5e4" /># Standalone synthetic demonstration of matched time-to-diagnosis gradients
 
 [Back to repository overview](../README.md)
 
 A standalone companion for **Protocol for matched time-to-diagnosis gradient analysis of baseline plasma metabolomics in prospective cohorts**.
 
-![Uploading Graphical abstract.jpeg…]()
-
+<img width="5869" height="5638" alt="Graphical abstract" src="https://github.com/user-attachments/assets/d72d0f9b-0e64-499a-bd18-ec90713de66c" />
 
 **All default inputs and outputs are fully synthetic. No UK Biobank participant records, fitted UKB parameters, private intermediate files, or original study result tables are used.** The example is a software demonstration, not a new biological analysis, independent validation, or a reproduction of the published migraine results.
 

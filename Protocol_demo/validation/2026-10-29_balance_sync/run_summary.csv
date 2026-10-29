@@ -1,0 +1,13 @@
+"metric","value"
+"eligible_participants",5000
+"incident_cases",322
+"matched_cases",322
+"matched_controls",3220
+"metabolites_tested",20
+"metabolites_selected",16
+"metabolites_clustered",16
+"max_postmatch_absolute_smd",0.111126042215701
+"n_balance_covariates",13
+"n_balance_covariates_unevaluable",0
+"n_balance_levels_unevaluable",0
+"n_balance_covariates_above_threshold",1

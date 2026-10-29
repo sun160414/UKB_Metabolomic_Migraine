@@ -61,7 +61,9 @@ Protocol_demo/synthetic_demo_output/
 ├── input/                       # Synthetic data, dictionary, preprocessing checks
 └── analysis/
     ├── analysis_configuration.R
+    ├── sessionInfo_initial.txt
     ├── sessionInfo.txt
+    ├── source_md5.csv
     ├── warnings.log
     ├── execution_status.txt
     ├── data_processed/          # RDS checkpoints
@@ -69,9 +71,29 @@ Protocol_demo/synthetic_demo_output/
     └── figures/                 # Labeled synthetic demonstration PNGs
 ```
 
-**Execution status:** the standalone synthetic-data demonstration has been successfully executed end-to-end in R, with the workflow completing as expected. The generated outputs and execution checks can be inspected in the designated output directory.
+**Execution status:** the revised synthetic demonstration completed twice with the default configuration in R 4.3.3 on Linux. All 88 focused regression checks, all eight execution checks in each run, and all 268 baseline/repeat comparison and PNG-export checks passed. The [current verification records](Protocol_demo/validation/2026-10-29_repository_fixes/) document the tested source contents, environment, warnings and comparisons. The [earlier balance-synchronization records](Protocol_demo/validation/2026-10-29_balance_sync/) remain available for their recorded revision. These checks use artificial data; the original UK Biobank analyses have not been rerun for this update.
+
+Figure 1D summarizes the percentage of metabolites with valid Z-scores in **every** matched set: `100 * mean(valid_fraction == 1)`, where `valid_fraction` is calculated separately for each metabolite. It does not average the fractions themselves. An unknown/nonfinite fraction makes the overall percentage unevaluable. The summary is saved as `figure1D_z_completeness_source.csv`; `z_score_completeness.csv` and `diagnostic_z_completeness.png` retain the per-metabolite diagnostics.
 
 See [the demonstration README](Protocol_demo/README.md) for parameter settings, output details, input-field mapping, scientific limitations, and verification steps.
+
+### 4. Run focused regression checks
+
+From the repository root:
+
+```bash
+Rscript --vanilla tests/test_study_safeguards.R
+Rscript --vanilla Protocol_demo/tests/test_completeness.R
+Rscript --vanilla Protocol_demo/tests/test_balance.R
+```
+
+These suites contain 26 study-script safeguard checks, 9 completeness checks and 53 balance checks, respectively. They use artificial inputs and load function definitions without running the original study analyses. Their minimum additional packages are:
+
+```r
+install.packages(c("dplyr", "tidyr", "tibble", "purrr", "ggplot2"))
+```
+
+The completeness checks require base R only. The balance checks require ggplot2; the study-script checks require dplyr, tidyr, tibble and purrr. Running the full synthetic demonstration additionally requires the demonstration dependencies listed above.
 
 ## Repository structure
 
@@ -82,10 +104,18 @@ See [the demonstration README](Protocol_demo/README.md) for parameter settings, 
 ├── 2.Trajectories+clusters.R
 ├── 3.PRS
 ├── 4.SEM.R
+├── tests/
+│   └── test_study_safeguards.R
 └── Protocol_demo/
     ├── generate_synthetic_data.R
     ├── run_synthetic_example.R
-    └── README.md
+    ├── README.md
+    ├── tests/
+    │   ├── test_balance.R
+    │   └── test_completeness.R
+    └── validation/
+        ├── 2026-10-29_balance_sync/
+        └── 2026-10-29_repository_fixes/
 ```
 
 The original study files remain in the **repository root**, not in a `scripts/` subfolder. The synthetic demonstration is separate and does not modify or source those files.
@@ -99,6 +129,8 @@ The original study files remain in the **repository root**, not in a `scripts/` 
 - Cox regression for incident hospital-diagnosed migraine, including age- and sex-stratified analyses.
 - Cross-sectional linear regression for prevalent migraine.
 - Bonferroni and Benjamini–Hochberg multiple-testing correction and volcano plots.
+
+Sex-stratified analyses use the explicit `sex_codes` assignment in the script's **Configuration** section. Its default is `c(female = "0", male = "1")`, matching the [UK Biobank coding](https://biobank.ndph.ox.ac.uk/showcase/coding.cgi?id=9). For text labels, edit that assignment to the actual values, for example `c(female = "Female", male = "Male")`, before running the script. Unknown values or an absent mapped group stop the analysis; group identity is never inferred from factor-level order. Missing sex is reported and excluded from the sex-stratified analyses.
 
 The original workflow documentation identifies the following main outputs:
 
@@ -124,6 +156,10 @@ These are study-specific outputs, not files distributed as results of the synthe
 `2.Trajectories+clusters.R` contains the matched case-control gradient workflow. Incident cases are matched to controls using nearest-neighbor Mahalanobis matching with exact matching on sex. Metabolite values are residualized for covariates, and case-control differences are expressed as matched-set standardized Z-scores. LOESS and hierarchical clustering summarize descriptive baseline differences aligned to future diagnosis time.
 
 The curves describe **between-person baseline gradients**, not within-person longitudinal trajectories.
+
+This script requires `prevalent_migraine` coded 0/1 and explicitly excludes baseline prevalent cases before matching. It also requires `incident_migraine` or an incident-only `migraine_status`, coded 0/1. Missing required columns or invalid codes stop execution; records with missing outcome flags are excluded with a warning. Conflicting incident flags, or a participant marked both prevalent and incident, stop execution for correction.
+
+The LOESS grid is rounded inward to the observed time range. Predictions outside an individual metabolite's observed support remain missing; no extrapolation is performed. Clustering retains only curves with finite predictions across the full grid and stops if too few remain.
 
 The original workflow documentation identifies the following main outputs:
 
@@ -166,8 +202,8 @@ The participant-level study table has one row per participant and includes:
 | Variable | Description |
 |---|---|
 | `eid` | Participant identifier |
-| `prevalent_migraine` | Diagnosis before or at baseline |
-| `incident_migraine` | Incident diagnosis after baseline |
+| `prevalent_migraine` | Required 0/1 flag for diagnosis before or at baseline; baseline cases are excluded from prospective matching |
+| `incident_migraine` | 0/1 flag for incident diagnosis after baseline; the gradient script also accepts an explicitly incident-only `migraine_status` |
 | `followup_years` | Time from baseline to event or censoring |
 | `migraine_years` | Diagnosis or censoring interval used by the study gradient script |
 | `age`, `sex`, `ethn` | Baseline demographic variables |
@@ -185,6 +221,8 @@ The metabolite map `data/metabolite_name_map.csv` contains:
 |---|---|
 | `Meta` | Internal metabolite identifier, such as `Meta_1` |
 | `Original_Metabolite` | Human-readable metabolite name |
+
+Numeric covariate preparation preserves the displayed values of numeric factor labels, including `age`, `Qualification` and the gradient script's `migraine_years`. A factor labelled `55` and `68` is converted to those values, not its internal level numbers. Inputs already stored as numeric retain their precision. Outcome flags still require the explicit binary definitions above.
 
 Consult the configuration and formulas in each study script for its exact input requirements. Restricted source data and private intermediate objects must be prepared locally and must not be uploaded to this repository.
 

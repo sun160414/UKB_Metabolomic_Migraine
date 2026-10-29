@@ -2,10 +2,9 @@
 # FULLY SYNTHETIC DATA: no real participants or fitted UKB parameters are used.
 # Usage: Rscript generate_synthetic_data.R output_directory [n] [p] [seed]
 # Defaults: n=5000, p=20, seed=20260801. Requires base R only.
-# This companion uses the same explicit PRNG/draw order as the tested Python
-# generator. Numerical results may differ at floating-point rounding precision.
-# IMPORTANT: this R companion has not been executed in the file-creation environment.
-# See README.md for test status and run_synthetic_example.R for the analysis driver.
+# This companion uses an explicit PRNG and draw order for reproducible simulation.
+# See README.md and the versioned validation records for tested source revisions,
+# execution status and software versions; run_synthetic_example.R is the driver.
 # This file only generates/preprocesses input; Cox results are computed by the driver.
 
 make_rng <- function(seed) {

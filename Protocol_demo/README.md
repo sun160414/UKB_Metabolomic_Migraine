@@ -8,7 +8,7 @@ A standalone companion for **Protocol for matched time-to-diagnosis gradient ana
 
 ## Execution status
 
-See the [versioned validation records](validation/2026-10-29_balance_sync/) for the tested code revision, configuration, execution checks, warnings and comparison results. A successful run applies to the recorded revision and configuration, not automatically to later code changes. Successful execution confirms computational functionality but does not constitute independent biological validation.
+The revised default example completed twice in R 4.3.3 on Linux. See the [current versioned validation records](validation/2026-10-29_repository_fixes/) for the tested source fingerprints, configuration, execution checks, warnings and baseline/repeat comparison results. All 268 comparison and PNG-export checks passed; the original numerical analysis outputs were unchanged. The [earlier balance-synchronization records](validation/2026-10-29_balance_sync/) remain available for their recorded revision. A successful run applies to the recorded source contents and configuration, not automatically to later code changes. Successful execution confirms computational functionality but does not constitute independent biological validation.
 
 This companion is independent of the original study scripts in the repository root. It generates its own inputs and recomputes Cox results locally; it does not modify or source the study-specific analysis files.
 
@@ -21,14 +21,19 @@ Protocol_demo/
 ├── generate_synthetic_data.R
 ├── run_synthetic_example.R
 ├── README.md
-├── tests/test_balance.R
-└── validation/2026-10-29_balance_sync/
+├── tests/
+│   ├── test_balance.R
+│   └── test_completeness.R
+└── validation/
+    ├── 2026-10-29_balance_sync/
+    └── 2026-10-29_repository_fixes/
 ```
 
 - `generate_synthetic_data.R`: generates a participant-level cohort, a raw metabolite matrix, a preprocessed matrix, a metabolite dictionary, and preprocessing audit files. It requires base R only. It does **not** fit Cox models or produce final analysis figures.
 - `run_synthetic_example.R`: calls the generator, fits Cox models from the newly generated data, performs matching and the downstream protocol, and writes analysis tables, RDS checkpoints, PNG figures, configuration, warnings and execution checks. It can also be sourced to expose functions without executing the default example.
 - `README.md`: installation, run instructions, inputs, outputs, parameter changes and limitations.
 - `tests/test_balance.R`: focused regression checks for SMD calculation, categorical aggregation and unevaluable diagnostics.
+- `tests/test_completeness.R`: checks that Figure 1D counts metabolites complete in every matched set, including explicit handling of unavailable completeness values.
 - `validation/`: compact, version-specific verification records; not participant-level study data.
 
 No other files from the study repository need to be sourced. In particular, this example does not depend on `NMR.csv`, `Map.txt`, `dat`, `Data_Met_ascii.xlsx`, or an existing R workspace.
@@ -41,7 +46,7 @@ Use R 4.1 or later. Install the required packages once in R:
 install.packages(c("MatchIt", "survival", "ggplot2", "mclust", "cluster"))
 ```
 
-The plotting code uses `linewidth`, so use **ggplot2 3.4.0 or later**. Matching uses the documented `matchit()` and `match.data()` APIs. The verification environment is R 4.4.2 with MatchIt 4.7.2, survival 3.7-0, ggplot2 3.5.2, mclust 6.1.2 and cluster 2.1.6; see the versioned records above for the associated source revision and execution status. These versions describe the verification environment, not an enforced lockfile or a guarantee for other versions. The script reports missing packages rather than installing software automatically.
+The plotting code uses `linewidth`, so use **ggplot2 3.4.0 or later**. Matching uses the documented `matchit()` and `match.data()` APIs. The current verification environment is R 4.3.3 on Ubuntu 24.04.3 LTS with MatchIt 4.5.5, survival 3.5-8, ggplot2 3.4.4, mclust 6.0.1 and cluster 2.1.6. The earlier balance-synchronization revision was verified in R 4.4.2 with its separately recorded package versions. See each versioned record for its associated source contents and execution status. These versions describe tested environments, not an enforced lockfile or a guarantee for other versions. The script reports missing packages rather than installing software automatically.
 
 The standalone demo uses `survival` to fit Cox models, `mclust` for adjusted Rand indices, and `cluster` for silhouette diagnostics. The manuscript code boxes also directly use `data.table` 1.17.0, `readxl` 1.4.5, `patchwork` 1.3.0 and `scales` 1.3.0, as recorded in the original analysis sessions. Those four are not additional direct dependencies of this demo: it uses base R for data handling and exports separate figure panels. Packages such as `scales` may still be loaded indirectly by ggplot2.
 
@@ -123,6 +128,14 @@ Both variances are sample variances calculated after matching. Numeric covariate
 
 Missing/nonfinite values, insufficient group sizes, or unequal constant groups make an SMD unevaluable. Identical constant groups are recorded as zero. If any indicator level is unevaluable, the covariate's plotting summary is `NA`, not the maximum of only its remaining levels. The plot retains its row with **Not evaluable** instead of placing a point at zero or dropping it silently. Unevaluable diagnostics are counted separately; `max_postmatch_absolute_smd` is `NA` if any covariate is unevaluable. A low maximum among a subset must not be interpreted as complete balance.
 
+### Figure 1D completeness definition and source tables
+
+Figure 1D matches the manuscript's aggregate definition: the percentage of metabolites with a valid Z-score in **every** retained matched set. For evaluable per-metabolite completeness fractions, this is `100 * mean(valid_fraction == 1)`. It is not the average of the per-metabolite valid fractions. For example, fractions `1, 0.5, 0, 1` give two complete metabolites out of four, or 50%.
+
+`figure1D_z_completeness_source.csv` and its RDS copy retain the total metabolite count, the complete count, the unevaluable count, the percentage and a diagnostic status. If any fraction is missing or nonfinite, the aggregate percentage is unavailable and the figure displays **Not evaluable**. Unknown values are not removed from the denominator to produce an apparent 100%.
+
+The detailed per-metabolite table remains `z_score_completeness.csv` with its RDS copy. Its separate plot is `diagnostic_z_completeness.png`; `figure1D_z_completeness.png` now contains the manuscript's aggregate summary.
+
 ### Education encoding
 
 The synthetic generator deliberately creates `education` as the arbitrary categories `Low`, `Medium` and `High`; the demo therefore lists it in `cfg$factor_covariates`. In the original worked example, `education` corresponds to the derived **numeric** `Qualification` covariate. These encodings are not equivalent. For a dataset with the original numeric education variable, retain its numeric values and remove `education` from `cfg$factor_covariates`. Do not simply remove that setting while using the synthetic text categories, or recode `Low/Medium/High` as `1/2/3` and claim equivalence to the original variable.
@@ -155,11 +168,11 @@ synthetic_demo_output/
     └── figures/          # PNG demonstration figures
 ```
 
-Important tables include `cohort_flow.csv`, `cohort_exclusions.csv`, `synthetic_cox_results.csv`, `matched_set_integrity.csv`, the three covariate-balance tables described above, `case_metabolite_z_scores_long.csv`, `z_score_completeness.csv`, `control_sd_diagnostics.csv`, `loess_fit_audit.csv`, `selected_metabolites.csv`, `cluster_membership.csv`, `cluster_summary.csv`, `clustering_excluded_metabolites.csv`, `sensitivity_curve_similarity.csv`, `sensitivity_cluster_agreement.csv`, `execution_checks.csv` and `run_summary.csv`. Tables written by the analysis driver have matching RDS copies in `data_processed/`.
+Important tables include `cohort_flow.csv`, `cohort_exclusions.csv`, `synthetic_cox_results.csv`, `matched_set_integrity.csv`, the three covariate-balance tables described above, `case_metabolite_z_scores_long.csv`, `z_score_completeness.csv`, `figure1D_z_completeness_source.csv`, `control_sd_diagnostics.csv`, `loess_fit_audit.csv`, `selected_metabolites.csv`, `cluster_membership.csv`, `cluster_summary.csv`, `clustering_excluded_metabolites.csv`, `sensitivity_curve_similarity.csv`, `sensitivity_cluster_agreement.csv`, `execution_checks.csv` and `run_summary.csv`. Tables written by the analysis driver have matching RDS copies in `data_processed/`.
 
-Demonstration figure panels are exported separately as PNG files rather than replacing the published composite figures. The main families are `figure1A_*` to `figure1D_*`, `figure2_*`, `figure3A_*` and `figure3B_*`. A denominator plot and, by default, a cluster-count diagnostic are also generated. Figures are prominently labeled **SYNTHETIC DEMONSTRATION**.
+Demonstration figure panels are exported separately as PNG files rather than replacing the published composite figures. The main families are `figure1A_*` to `figure1D_*`, `figure2_*`, `figure3A_*` and `figure3B_*`. Separate per-metabolite completeness and denominator plots and, by default, a cluster-count diagnostic are also generated. Figures are prominently labeled **SYNTHETIC DEMONSTRATION**.
 
-A `COMPLETED` status means that the code reached its end and passed its programmed execution checks. It does **not** mean all covariates are balanced, there is no selection bias, or the method has been biologically validated. Inspect `warnings.log` even when execution completes. After an error, use a new output folder for the next attempt.
+A `COMPLETED` status means that the code reached its end and passed its programmed execution checks. When plotting is enabled, every export must also exist, contain more than the eight-byte PNG signature and have that signature; a missing or empty export stops the run. This basic file check does not replace opening and inspecting the plots. Successful completion does **not** mean all covariates are balanced, there is no selection bias, or the method has been biologically validated. Inspect `warnings.log` even when execution completes. After an error, use a new output folder for the next attempt.
 
 ## 6. Change parameters without editing every model
 
@@ -236,11 +249,12 @@ Before uploading a tested release, locally:
 
    ```bash
    Rscript --vanilla Protocol_demo/tests/test_balance.R
+   Rscript --vanilla Protocol_demo/tests/test_completeness.R
    Rscript --vanilla Protocol_demo/run_synthetic_example.R demo_run_01 5000 20 20260801
    ```
 
 2. Check the execution status, all execution-check rows, unmatched cases, balance diagnostics, excluded curves and warnings.
-3. Inspect every exported figure and its source table. In particular, verify one summary row per matching/exact covariate in Figure 1A, preservation of the full indicator-level results, and absence of Ward.D2 from the curve-correlation panel.
+3. Inspect every exported figure and its source table. In particular, verify one summary row per matching/exact covariate in Figure 1A, preservation of the full indicator-level results, the aggregate completeness definition in Figure 1D and absence of Ward.D2 from the curve-correlation panel.
 4. Rerun the same configuration into a new folder and compare numerical tables (rather than RDS binary hashes or timestamp/session text).
 5. Retain the tested R/package versions, code commit and source fingerprints. Do not claim an end-to-end test until these steps have actually succeeded. New code requires new verification records; earlier successful logs do not validate a later revision. Remove personal paths/usernames from public logs and never upload restricted participant-level inputs or intermediates.
 

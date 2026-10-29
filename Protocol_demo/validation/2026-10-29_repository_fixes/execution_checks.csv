@@ -1,0 +1,9 @@
+"check","passed"
+"unique_matched_participants",TRUE
+"one_case_per_set",TRUE
+"requested_controls_per_set",TRUE
+"exact_matching",TRUE
+"matched_z_formula",TRUE
+"primary_grid_no_extrapolation",TRUE
+"clustered_curves_complete",TRUE
+"cohort_and_dictionary_identifiers",TRUE

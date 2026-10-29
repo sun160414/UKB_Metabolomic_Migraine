@@ -10,7 +10,7 @@
 # Example:
 #   dat <- readRDS("data/analysis_dataset.rds")
 #   metabolome_name_map <- data.table::fread("data/metabolite_name_map.csv")
-#   source("scripts/01_cox_linear.R")
+#   source("1.Cox+linear.R")
 
 suppressPackageStartupMessages({
   library(data.table)
@@ -37,6 +37,11 @@ covariates <- c(
   "diabetes_status", "CVD_status"
 )
 
+# Explicit input-value mapping; never infer sex from factor-level order.
+# UK Biobank field 31: 0 = female, 1 = male. For text-labelled inputs, edit the
+# configuration below to sex_codes <- c(female = "Female", male = "Male").
+sex_codes <- c(female = "0", male = "1")
+
 # ---------------------------
 # Helper functions
 # ---------------------------
@@ -56,20 +61,60 @@ quote_if_needed <- function(x) {
   ifelse(make.names(x) != x, paste0("`", x, "`"), x)
 }
 
+split_sex_strata <- function(data, sex_codes) {
+  if (length(sex_codes) != 2L || is.null(names(sex_codes)) ||
+      anyDuplicated(names(sex_codes)) ||
+      !setequal(names(sex_codes), c("female", "male"))) {
+    stop("sex_codes must explicitly name one female value and one male value.", call. = FALSE)
+  }
+  codes <- setNames(trimws(as.character(sex_codes)), names(sex_codes))
+  if (anyNA(codes) || any(!nzchar(codes)) || anyDuplicated(unname(codes))) {
+    stop("The female and male sex_codes must be nonmissing, nonempty and distinct.", call. = FALSE)
+  }
+  if (!"sex" %in% names(data)) stop("Missing sex column.", call. = FALSE)
+
+  # as.character preserves factor labels instead of using their integer codes.
+  values <- trimws(as.character(data$sex))
+  missing <- is.na(values) | !nzchar(values)
+  unknown <- setdiff(unique(values[!missing]), unname(codes))
+  if (length(unknown)) {
+    stop("Unmapped sex value(s): ", paste(unknown, collapse = ", "),
+         ". Verify the input encoding and set sex_codes explicitly.", call. = FALSE)
+  }
+  groups <- lapply(c("female", "male"), function(group) {
+    data[which(!missing & values == codes[[group]]), , drop = FALSE]
+  })
+  names(groups) <- c("female", "male")
+  empty <- names(groups)[vapply(groups, nrow, integer(1)) == 0L]
+  if (length(empty)) {
+    stop("No participants in the mapped sex stratum: ", paste(empty, collapse = ", "),
+         ". Check the input data and sex_codes before sex-stratified analysis.", call. = FALSE)
+  }
+  if (any(missing)) {
+    warning("Excluded ", sum(missing),
+            " participants with missing sex from sex-stratified analyses.", call. = FALSE)
+  }
+  groups
+}
+
 prepare_covariates <- function(data) {
+  numeric_value <- function(x) {
+    if (is.factor(x)) x <- as.character(x)
+    as.numeric(x)
+  }
   data %>%
     mutate(
-      age = as.numeric(age),
+      age = numeric_value(age),
       sex = factor(sex),
       ethn = factor(ethn),
-      Qualification = as.numeric(Qualification),
-      bmi = as.numeric(bmi),
-      Socioeconomic = as.numeric(Socioeconomic),
+      Qualification = numeric_value(Qualification),
+      bmi = numeric_value(bmi),
+      Socioeconomic = numeric_value(Socioeconomic),
       Smoking_status = factor(Smoking_status),
       Alcohol_consumption = factor(Alcohol_consumption),
-      `screen time (TV)` = as.numeric(`screen time (TV)`),
-      `screen time (computer)` = as.numeric(`screen time (computer)`),
-      `sleep duration` = as.numeric(`sleep duration`),
+      `screen time (TV)` = numeric_value(`screen time (TV)`),
+      `screen time (computer)` = numeric_value(`screen time (computer)`),
+      `sleep duration` = numeric_value(`sleep duration`),
       diabetes_status = factor(diabetes_status),
       CVD_status = factor(CVD_status)
     )
@@ -377,6 +422,9 @@ message("Detected ", length(metabolites), " metabolite columns.")
 dat_incident <- dat %>%
   filter(prevalent_migraine == 0)
 
+# Validate coding and both groups before writing any association results.
+sex_subsets <- split_sex_strata(dat_incident, sex_codes)
+
 # Overall Cox analysis
 cox_overall <- run_cox_scan(dat_incident, metabolites, covariates) %>%
   format_results(p_col = "p", metabolite_map = metabolome_name_map)
@@ -386,8 +434,8 @@ write_result(cox_overall, "cox_overall.csv")
 cox_strata <- list(
   age_lt55 = list(data = dat_incident %>% filter(age < 55), covars = setdiff(covariates, "age")),
   age_ge55 = list(data = dat_incident %>% filter(age >= 55), covars = setdiff(covariates, "age")),
-  male = list(data = dat_incident %>% filter(sex == levels(droplevels(dat_incident$sex))[1]), covars = setdiff(covariates, "sex")),
-  female = list(data = dat_incident %>% filter(sex == levels(droplevels(dat_incident$sex))[2]), covars = setdiff(covariates, "sex"))
+  male = list(data = sex_subsets$male, covars = setdiff(covariates, "sex")),
+  female = list(data = sex_subsets$female, covars = setdiff(covariates, "sex"))
 )
 
 cox_strata_results <- imap(cox_strata, function(x, nm) {

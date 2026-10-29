@@ -1,0 +1,1 @@
+COMPLETED: synthetic execution only; inspect diagnostic warnings.

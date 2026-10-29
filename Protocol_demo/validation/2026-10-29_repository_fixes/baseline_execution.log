@@ -1,0 +1,12 @@
+SYNTHETIC ONLY: n=5000; metabolites=20; incident cases=322; noncases=4678
+1/9 Constructing the eligible cohort
+2/9 Fitting Cox models (no external results file)
+3/9 Matching and assessing balance
+DIAGNOSTIC WARNING: Some post-match SMDs exceed the diagnostic threshold; inspect covariate_balance.csv.
+4/9 Residualizing metabolites and calculating matched-set Z-scores
+5/9 Fitting all metabolite curves on an inward-rounded grid
+6/9 Clustering selected curves
+7/9 Writing diagnostic figures and figure-source tables
+8/9 Running prespecified sensitivity analyses
+9/9 Saving validation checks and optional cluster-count diagnostics
+Completed synthetic demonstration. Results: <baseline>/analysis

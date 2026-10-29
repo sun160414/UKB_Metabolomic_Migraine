@@ -8,7 +8,7 @@ A standalone companion for **Protocol for matched time-to-diagnosis gradient ana
 
 ## Execution status
 
-The scripts have received static inspection, but **no completed R execution is documented in this update**. Static inspection is not an R parser check or a successful end-to-end test. Run the default example in a clean R session, inspect all warnings, tables and figures, and retain the generated session information before reporting successful execution.
+The standalone synthetic-data demonstration has been successfully executed end-to-end in R. The workflow completed synthetic data generation, preprocessing, cohort construction, Cox regression, matching, residualization, matched-set Z-score calculation, LOESS smoothing, descriptive clustering, sensitivity analyses, and output generation. Successful execution confirms computational functionality under the tested configuration but does not constitute independent biological validation.
 
 This companion is independent of the original study scripts in the repository root. It generates its own inputs and recomputes Cox results locally; it does not modify or source the study-specific analysis files.
 

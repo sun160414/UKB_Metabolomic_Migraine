@@ -37,6 +37,7 @@ protocol_config <- function() {
     exact_covariates = "sex",
     adjustment_covariates = baseline_covariates,
     cox_covariates = baseline_covariates,
+    # Synthetic education is Low/Medium/High; original Qualification is numeric.
     factor_covariates = c("sex", "ethnicity", "education", "smoking",
                           "alcohol", "diabetes", "cvd"),
     match_ratio = 10L, matching_order = "data", balance_threshold = 0.10,
@@ -84,7 +85,8 @@ check_config <- function(cfg) {
   }
   if (!cfg$loess_degree %in% 1:2) stop("loess_degree must be 1 or 2")
   if (cfg$selection_alpha <= 0 || cfg$selection_alpha >= 1) stop("Invalid selection_alpha")
-  if (cfg$balance_threshold <= 0) stop("balance_threshold must be positive")
+  if (length(cfg$balance_threshold) != 1L || !is.finite(cfg$balance_threshold) ||
+      cfg$balance_threshold <= 0) stop("balance_threshold must be finite and positive")
   if (length(cfg$winsor_probs) != 2L || any(!is.finite(cfg$winsor_probs)) ||
       cfg$winsor_probs[1] < 0 || cfg$winsor_probs[2] > 1 ||
       cfg$winsor_probs[1] >= cfg$winsor_probs[2]) stop("Invalid winsor_probs")
@@ -236,6 +238,93 @@ fit_cox_results <- function(data, metabolite_cols, dictionary, covariates) {
 }
 
 # ------------------------- Matching and balance -----------------------------
+# Figure 1A uses unweighted matched participants and sample variances, not the
+# default MatchIt standardization. Retain every observed categorical level.
+matched_covariate_balance <- function(data, covariates, threshold = 0.10) {
+  data <- as.data.frame(data)
+  if (!is.character(covariates) || !length(covariates) || anyNA(covariates) ||
+      any(!nzchar(covariates))) stop("Supply nonempty covariate names")
+  covariates <- unique(covariates)
+  if (!all(c("status", covariates) %in% names(data))) stop("Missing status or covariates")
+  if (!(is.numeric(data$status) || is.logical(data$status)) || anyNA(data$status) ||
+      any(!data$status %in% c(0, 1))) stop("status must contain nonmissing 0/1 values")
+  if (length(threshold) != 1L || !is.finite(threshold) || threshold <= 0)
+    stop("threshold must be finite and positive")
+  case <- data$status == 1L
+  smd_result <- function(x) {
+    a <- x[case]; b <- x[!case]
+    ans <- data.frame(n_case = length(a), n_control = length(b),
+      mean_case = NA_real_, mean_control = NA_real_, var_case = NA_real_,
+      var_control = NA_real_, denominator = NA_real_, smd = NA_real_,
+      diagnostic_status = "computed", stringsAsFactors = FALSE)
+    if (length(a) < 2L || length(b) < 2L) {
+      ans$diagnostic_status <- "insufficient_group_size"
+    } else if (any(!is.finite(x))) {
+      ans$diagnostic_status <- "nonfinite_values"
+    } else {
+      ans$mean_case <- mean(a); ans$mean_control <- mean(b)
+      ans$var_case <- var(a); ans$var_control <- var(b)
+      ans$denominator <- sqrt((ans$var_case + ans$var_control) / 2)
+      delta <- ans$mean_case - ans$mean_control
+      if (!is.finite(delta) || !is.finite(ans$denominator)) {
+        ans$diagnostic_status <- "nonfinite_statistics"
+      } else if (ans$denominator == 0) {
+        # Identical constants have no imbalance; different constants cannot
+        # be standardized. Never turn the latter into a zero or partial max.
+        if (delta == 0) {
+          ans$smd <- 0
+          ans$diagnostic_status <- "identical_constants"
+        } else ans$diagnostic_status <- "zero_variance_different_means"
+      } else {
+        ans$smd <- delta / ans$denominator
+        if (!is.finite(ans$smd)) {
+          ans$smd <- NA_real_
+          ans$diagnostic_status <- "nonfinite_statistics"
+        }
+      }
+    }
+    ans
+  }
+  levels_table <- do.call(rbind, lapply(covariates, function(v) {
+    x <- data[[v]]
+    if (is.factor(x)) {
+      lev <- sort(unique(as.character(x[!is.na(x)])))
+      # An entirely missing factor still needs an explicit diagnostic row.
+      if (!length(lev)) lev <- NA_character_
+      do.call(rbind, lapply(lev, function(label) {
+        values <- if (is.na(label)) rep(NA_real_, length(x)) else as.numeric(x == label)
+        cbind(data.frame(variable = v, variable_type = "categorical", level = label),
+              smd_result(values))
+      }))
+    } else {
+      if (!is.numeric(x)) stop(v, ": convert categorical covariates to factors before assessment")
+      cbind(data.frame(variable = v, variable_type = "numeric", level = NA_character_),
+            smd_result(x))
+    }
+  }))
+  rownames(levels_table) <- NULL
+  levels_table$abs_smd <- abs(levels_table$smd)
+  levels_table$evaluable <- is.finite(levels_table$abs_smd)
+  levels_table$above_threshold <- ifelse(levels_table$evaluable,
+    levels_table$abs_smd >= threshold, NA)
+  summary_table <- do.call(rbind, lapply(covariates, function(v) {
+    rows <- levels_table[levels_table$variable == v, , drop = FALSE]
+    valid <- all(rows$evaluable)
+    maximum <- strict_balance_max(rows$abs_smd)
+    data.frame(variable = v, variable_type = rows$variable_type[1],
+      n_levels = nrow(rows), n_unevaluable = sum(!rows$evaluable), abs_smd = maximum,
+      evaluable = valid, above_threshold = if (valid) maximum >= threshold else NA,
+      diagnostic_status = if (valid) "computed" else
+        paste(unique(rows$diagnostic_status[!rows$evaluable]), collapse = ";"))
+  }))
+  rownames(summary_table) <- NULL
+  list(levels = levels_table, summary = summary_table)
+}
+
+strict_balance_max <- function(x) {
+  if (length(x) && all(is.finite(x))) max(x) else NA_real_
+}
+
 match_and_assess <- function(data, cfg) {
   exact <- if (length(cfg$exact_covariates)) reformulate(cfg$exact_covariates) else NULL
   m <- MatchIt::matchit(
@@ -264,14 +353,21 @@ match_and_assess <- function(data, cfg) {
   matched <- sm$sum.matched
   smd_col <- grep("Std.*Mean.*Diff", colnames(matched), value = TRUE)
   if (length(smd_col) != 1L) stop("Cannot identify MatchIt standardized mean difference column")
-  bal <- data.frame(variable = rownames(matched), matched, check.names = FALSE, row.names = NULL)
-  bal$abs_smd <- abs(matched[, smd_col])
-  bal$abs_smd_before <- abs(sm$sum.all[rownames(matched), smd_col])
-  bal$above_threshold <- is.finite(bal$abs_smd) & bal$abs_smd >= cfg$balance_threshold
-  if (any(bal$above_threshold)) warning("Some post-match SMDs exceed the diagnostic threshold; inspect covariate_balance.csv.")
-  if (any(!is.finite(bal$abs_smd))) warning("Some balance diagnostics are nonfinite; inspect covariate_balance.csv.")
+  # Preserve MatchIt diagnostics separately; do not mix denominators in a
+  # before/after comparison or use these rows as the Figure 1A source.
+  matchit_balance <- data.frame(matchit_variable = rownames(matched), matched,
+    check.names = FALSE, row.names = NULL)
+  matchit_balance$abs_smd_matchit <- abs(matched[, smd_col])
+  matchit_balance$abs_smd_before_matchit <- abs(sm$sum.all[rownames(matched), smd_col])
+  balance <- matched_covariate_balance(md,
+    unique(c(cfg$matching_covariates, cfg$exact_covariates)), cfg$balance_threshold)
+  if (any(balance$levels$above_threshold, na.rm = TRUE))
+    warning("Some post-match SMDs exceed the diagnostic threshold; inspect covariate_balance.csv.")
+  if (any(!balance$levels$evaluable))
+    warning("Some post-match SMDs are not evaluable; inspect diagnostic_status in covariate_balance.csv.")
   unused_cases <- setdiff(data$participant_id[data$status == 1L], md$participant_id[md$status == 1L])
-  list(matched = md, matchit = m, integrity = qc, balance = bal,
+  list(matched = md, matchit = m, integrity = qc, balance = balance$levels,
+       balance_plot = balance$summary, balance_matchit = matchit_balance,
        unmatched_cases = data.frame(participant_id = unused_cases))
 }
 
@@ -399,13 +495,24 @@ save_plot <- function(plot, name, dirs, cfg, width = 8, height = 5) {
   invisible(plot)
 }
 
-plot_quality <- function(matched, balance, z, completeness, dirs, cfg) {
-  b <- balance[is.finite(balance$abs_smd), , drop = FALSE]
+plot_covariate_balance <- function(balance_plot, cfg) {
+  b <- balance_plot
   b$variable <- factor(b$variable, levels = b$variable[order(b$abs_smd)])
-  p <- ggplot2::ggplot(b, ggplot2::aes(x = abs_smd, y = variable)) +
-    ggplot2::geom_point() + ggplot2::geom_vline(xintercept = cfg$balance_threshold, linetype = 2) +
-    ggplot2::labs(title = paste(cfg$plot_title_prefix, "post-match balance"), x = "Absolute SMD", y = NULL) +
+  ggplot2::ggplot(b, ggplot2::aes(x = abs_smd, y = variable)) +
+    ggplot2::geom_point(data = b[b$evaluable, , drop = FALSE]) +
+    ggplot2::geom_text(data = b[!b$evaluable, , drop = FALSE],
+      ggplot2::aes(x = 0, label = "Not evaluable"), hjust = 0, size = 3) +
+    ggplot2::geom_vline(xintercept = cfg$balance_threshold, linetype = 2) +
+    ggplot2::scale_y_discrete(drop = FALSE) +
+    ggplot2::labs(title = paste(cfg$plot_title_prefix, "post-match balance"),
+      subtitle = "One row per covariate; categorical: maximum across indicator levels",
+      caption = "Dashed line: diagnostic reference. Undefined SMDs are not set to zero.",
+      x = "Absolute post-match SMD", y = NULL) +
     ggplot2::theme_bw()
+}
+
+plot_quality <- function(matched, balance_plot, z, completeness, dirs, cfg) {
+  p <- plot_covariate_balance(balance_plot, cfg)
   save_plot(p, "figure1A_covariate_balance", dirs, cfg, height = 7)
   cases <- matched[matched$status == 1L, , drop = FALSE]
   write_table(cases[, c("participant_id", "subclass", "years_to_diagnosis"), drop = FALSE],
@@ -603,9 +710,17 @@ run_gradient_pipeline <- function(cohort, metabolite_cols, dictionary,
   set.seed(cfg$seed)
   saveRDS(cfg, file.path(dirs$data, "analysis_configuration.rds"))
   dput(cfg, file = file.path(dirs$root, "analysis_configuration.R"))
-  writeLines(capture.output(sessionInfo()), file.path(dirs$root, "sessionInfo.txt"))
+  writeLines(capture.output(sessionInfo()), file.path(dirs$root, "sessionInfo_initial.txt"))
+  source_names <- c("run_synthetic_example.R", "generate_synthetic_data.R")
+  source_paths <- file.path(.protocol_demo_dir, source_names)
+  present <- file.exists(source_paths)
+  write.csv(data.frame(file = source_names[present],
+    md5 = unname(tools::md5sum(source_paths[present]))),
+    file.path(dirs$root, "source_md5.csv"), row.names = FALSE)
   warnings_seen <- character(); completed <- FALSE
   on.exit({
+    # Capture late-loaded dependencies on both successful and failed runs.
+    writeLines(capture.output(sessionInfo()), file.path(dirs$root, "sessionInfo.txt"))
     writeLines(if (length(warnings_seen)) unique(warnings_seen) else "No R warnings captured.", file.path(dirs$root, "warnings.log"))
     status_line <- if (!completed) {
       "NOT COMPLETED: inspect console error and partial outputs; do not claim successful execution."
@@ -630,8 +745,12 @@ run_gradient_pipeline <- function(cohort, metabolite_cols, dictionary,
     saveRDS(match$matched, file.path(dirs$data, "matched_dataset.rds"))
     write_table(match$integrity, "matched_set_integrity", dirs)
     write_table(match$balance, "covariate_balance", dirs)
+    write_table(match$balance_plot, "covariate_balance_plot", dirs)
+    write_table(match$balance_matchit, "covariate_balance_matchit", dirs)
     write_table(match$unmatched_cases, "unmatched_cases", dirs)
-    saveRDS(list(set_qc = match$integrity, balance = match$balance), file.path(dirs$data, "matched_quality_control.rds"))
+    saveRDS(list(set_qc = match$integrity, balance = match$balance,
+      balance_plot = match$balance_plot, balance_matchit = match$balance_matchit),
+      file.path(dirs$data, "matched_quality_control.rds"))
     message("4/9 Residualizing metabolites and calculating matched-set Z-scores")
     residuals <- residualize_metabolites(match$matched, metabolite_cols, cfg$adjustment_covariates)
     saveRDS(residuals, file.path(dirs$data, "metabolite_residuals.rds"))
@@ -677,7 +796,7 @@ run_gradient_pipeline <- function(cohort, metabolite_cols, dictionary,
     write_table(cl$excluded, "clustering_excluded_metabolites", dirs)
     saveRDS(cl, file.path(dirs$data, "cluster_outputs.rds"))
     message("7/9 Writing diagnostic figures and figure-source tables")
-    plot_quality(match$matched, match$balance, z, completeness, dirs, cfg)
+    plot_quality(match$matched, match$balance_plot, z, completeness, dirs, cfg)
     plot_cluster_results(cl, dictionary, dirs, cfg)
     message("8/9 Running prespecified sensitivity analyses")
     sensitivity <- run_sensitivities(z, selected, pred, cl, grid, cfg, dirs)
@@ -698,10 +817,15 @@ run_gradient_pipeline <- function(cohort, metabolite_cols, dictionary,
     write_table(checks, "execution_checks", dirs)
     if (!all(checks$passed)) stop("An execution check failed; inspect execution_checks.csv")
     metrics <- data.frame(metric = c("eligible_participants", "incident_cases", "matched_cases", "matched_controls",
-                                    "metabolites_tested", "metabolites_selected", "metabolites_clustered", "max_postmatch_absolute_smd"),
+                                    "metabolites_tested", "metabolites_selected", "metabolites_clustered", "max_postmatch_absolute_smd",
+                                    "n_balance_covariates", "n_balance_covariates_unevaluable",
+                                    "n_balance_levels_unevaluable", "n_balance_covariates_above_threshold"),
                          value = c(nrow(d), sum(d$status), sum(match$matched$status == 1L), sum(match$matched$status == 0L),
                                    length(metabolite_cols), length(selected), nrow(cl$matrix),
-                                   max(match$balance$abs_smd, na.rm = TRUE)))
+                                   strict_balance_max(match$balance_plot$abs_smd),
+                                   nrow(match$balance_plot), sum(!match$balance_plot$evaluable),
+                                   sum(!match$balance$evaluable),
+                                   sum(match$balance_plot$above_threshold, na.rm = TRUE)))
     write_table(metrics, "run_summary", dirs)
     list(summary = metrics, checks = checks, output_dir = normalizePath(out_dir),
          sensitivity = sensitivity)
